@@ -61,9 +61,9 @@ public class App {
 
     private static void listarProductos() {
         var productos = productCatalog.all();
-        System.out.println("\nSKU\t\t\tNombre\t\t\tCategoría\tMarca\tPrecio\tStock\t★");
+        System.out.printf("%-11s %-30s %-11s %-8s %-8s %-8s %-8s%n", "SKU", "Nombre", "Categoria", "Marca", "Precio", "Stock", "Rating");
         for (var p : productos) {
-            System.out.printf(Locale.ROOT, "%s\t%s\t%s\t%s\tS/. %s\t%d\t%.1f%n",
+            System.out.printf("%-11s %-30s %-11s %-8s %-8s %-8s %-8s%n",
               p.sku(), p.nombre(), p.categoria(), p.marca(), p.precio(), p.stock(), p.rating());
         }
         System.out.println();
@@ -104,9 +104,10 @@ public class App {
         System.out.println("Carrito:");
         var resumen = cart.stream().collect(Collectors.groupingBy(CartLine::sku,
           Collectors.summingInt(CartLine::cantidad)));
+        System.out.printf("%-11s %-30s %-8s %-6s%n", "SKU", "Nombre", "Precio", "Cantidad");
         resumen.forEach((sku, qty) -> {
             var p = productCatalog.bySku(sku).orElseThrow();
-            System.out.printf(Locale.ROOT, "- %s x%d | %s | S/. %s c/u%n", sku, qty, p.nombre(), p.precio());
+            System.out.printf("%-11s %-30s %-8s %-6s%n", sku, p.nombre(), p.precio(), qty);
         });
         System.out.println();
     }
