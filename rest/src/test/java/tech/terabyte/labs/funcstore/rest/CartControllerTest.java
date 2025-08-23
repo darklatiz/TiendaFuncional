@@ -7,6 +7,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tech.terabyte.labs.funcstore.app.CartService;
@@ -36,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-public class CartControllerTest {
+class CartControllerTest {
     @Autowired
     MockMvc mockMvc;
 
@@ -102,15 +103,18 @@ public class CartControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/carts/{id} no existe -> actualmente 5xx (pendiente mapear a 404 con @ControllerAdvice)")
-    void viewCart_notFound_returns5xx_forNow() throws Exception {
-        String id = "missing";
-        when(cartStore.find(id)).thenReturn(Optional.empty());
+    void viewCart_notFound_returns404_withEnvelope() throws Exception {
+        when(cartStore.find("missing")).thenReturn(Optional.empty());
 
-        mockMvc.perform(get("/api/carts/{id}", id))
-          .andDo(print())
-          .andExpect(status().is5xxServerError());
-        // TODO: cuando añadas un @ControllerAdvice que mapee NoSuchElementException a 404:
-        // .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/carts/{id}", "missing"))
+          .andExpect(status().isNotFound())
+          .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+          .andExpect(jsonPath("$.success").value(false))
+          .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()))
+          .andExpect(jsonPath("$.error.code").value("NOT_FOUND"))
+          .andExpect(jsonPath("$.error.message").value(org.hamcrest.Matchers.startsWith("Cart not found")))
+          .andExpect(jsonPath("$.error.details").value(org.hamcrest.Matchers.nullValue()))
+          .andExpect(jsonPath("$.meta.requestId").isNotEmpty())
+          .andExpect(jsonPath("$.meta.timestamp").exists());
     }
 }
