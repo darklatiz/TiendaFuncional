@@ -1,149 +1,238 @@
-# 🛍️ Tienda Funcional (Java 17+)
+# TiendaFuncional
 
-Sistema modular que simula la venta de auriculares con **descuentos por cantidad** y **promociones de adaptadores Bluetooth** según la marca, soportando múltiples interfaces de usuario:
+> **Java 17 · Maven (multimódulo) · Clean/Hexa style (core/cli/rest) · Enfoque funcional (inmutabilidad + reglas puras)**
 
-- **CLI** (actual)
-- **REST API** (futuro) sin modificar el core
+Proyecto de **tienda de auriculares** con dominio funcional y capas desacopladas. El **core** concentra las reglas; **cli** y **rest** solo orquestan IO.
 
----
-
-## 📦 Características
-
-- **Java 17+**, sin legacy code.
-- **Arquitectura limpia**:
-  - `core`: Dominio, reglas de negocio y servicios de aplicación.
-  - `cli`: Adaptador de línea de comandos.
-  - `rest` (opcional futuro): Adaptador HTTP usando el mismo core.
-- **Reglas de descuento**:
-
-  | Cantidad de auriculares | Descuento |
-  |-------------------------|-----------|
-  | `< 2`                   | 0%        |
-  | `2 a 3`                 | 5%        |
-  | `5 a 8`                 | 8.5%      |
-  | `>= 10`                 | 12%       |
-
-- **Reglas de obsequios**:
- 
-  | Marca     | Adaptadores Bluetooth                     |
-  |-----------|-------------------------------------------|
-  | Sony      | 1 por cada 2 auriculares                  |
-  | JBL       | 2 por cada 3 auriculares                  |
-  | Logitech  | 1 por cada auricular                      |
-  | Redragon  | 2 por cada auricular                      |
- 
-- **Precios por marca**:
-
-  | Marca     | Precio (S/.) |
-  |-----------|--------------|
-  | Sony      | 120.00       |
-  | JBL       | 135.50       |
-  | Logitech  | 98.75        |
-  | Redragon  | 110.00       |
-
----
-
-## 🗂 Estructura de carpetas
+## 🧱 Módulos
 
 ```
+TiendaFuncional/
+├─ core/   # Dominio y reglas (funciones puras, VOs, servicios de cálculo)
+├─ cli/    # Interfaz de consola (usa core)
+└─ rest/   # Spring Boot 3 (API HTTP) que delega en core
+```
 
-tienda-funcional/
-├─ pom.xml                # POM padre (módulos core + cli)
-├─ core/                  # Dominio + aplicación + infraestructura
-│  └─ src/main/java/com/terabyte/funcstore/
-│     ├─ domain/          # Entidades, interfaces (puertos)
-│     ├─ app/             # Servicios de aplicación
-│     └─ infra/           # Adaptadores de datos
-└─ cli/                   # Adaptador CLI
-└─ src/main/java/com/terabyte/funcstore/cli/
+## 🔧 Requisitos
 
-````
+* **Java 17+**
+* **Maven 3.9+**
 
----
+## 📦 Parent POM (resumen)
 
-## 🚀 Ejecución
+* **groupId**: `tech.terabyte.labs`
+* **artifactId**: `tienda-funcional`
+* **version**: `1.0-SNAPSHOT`
+* **packaging**: `pom`
+* **modules**: `core`, `cli`, `rest`
+* **BOMs/Plugins**:
 
-### 1. Compilar y empaquetar
+    * JUnit BOM **5.11.0**
+    * Spring Boot deps **3.5.4**
+    * `maven-compiler-plugin` **3.14.0** (`release=17`)
+    * `maven-assembly-plugin` **3.6.0** (solo en **cli**)
+    * `spring-boot-maven-plugin` **3.5.4** (solo en **rest**)
 
-Desde la raíz del proyecto:
+## 🏗️ Build
+
+Compilar todo (saltando tests):
+
+```bash
+mvn -q -DskipTests clean package
+```
+
+Solo **CLI** (construye core como dependencia):
 
 ```bash
 mvn -q -DskipTests -pl cli -am package
-````
+```
 
-Esto compila `core` y `cli` y genera un JAR ejecutable con dependencias en `cli/target`.
-
----
-
-### 2. Ejecutar CLI
+Solo **REST** (construye core como dependencia):
 
 ```bash
-java -jar cli/target/cli-1.0-SNAPSHOT-jar-with-dependencies.jar
+mvn -q -DskipTests -pl rest -am package
 ```
 
----
+## ▶️ Ejecutar
 
-## 💻 Uso en CLI
+**CLI** (jar “fat” creado por assembly):
 
-Menú principal:
-
-```
-===============================
-🛍️  Tienda Funcional (CLI)
-===============================
-Menú:
-1) Comprar auriculares (con promo)
-0) Salir
+```bash
+java -jar cli/target/cli-*-jar-with-dependencies.jar
 ```
 
-Ejemplo:
+**REST** (Spring Boot):
 
-```
-Marcas: [SONY, JBL, LOGITECH, REDRAGON]
-Marca: sony
-Cantidad: 5
+```bash
+# Opción A: desde Maven
+mvn -q -DskipTests -pl rest -am spring-boot:run
 
-📦 Resumen de la compra
---------------------------------
-Marca: SONY
-Cantidad: 5
-Precio unitario: S/. 120.00
-Importe de compra: S/. 600.00
-Descuento aplicado: 8.5%
-Importe del descuento: S/. 51.00
-➡️  Total a pagar: S/. 549.00
-🎁 Adaptadores obsequiados: 2
+# Opción B: jar reempaquetado
+java -jar rest/target/rest-*.jar
 ```
 
----
+> Por defecto: `http://localhost:8080/`
 
-## 🌐 Preparado para REST API
+## 🌐 API REST (implementación actual)
 
-El módulo `core` es totalmente independiente de la interfaz.
-Para exponerlo vía HTTP, basta con crear un módulo `rest` y un controlador:
+> Todas las respuestas se devuelven envueltas en `ApiResponse<T>`. En los ejemplos de abajo mostramos solo el **payload** principal para brevedad.
 
-```java
-@RestController
-@RequestMapping("/api/compras")
-public class CompraController {
-    private final CompraService service;
-    public CompraController(CompraService service) { this.service = service; }
+### 1) Crear carrito
 
-    @PostMapping("/auriculares")
-    public CompraResult comprar(@RequestBody CompraRequest req) {
-        return service.calcular(req);
-    }
+**POST** `/api/carts`
+
+**Response** `201 Created`
+
+```json
+{
+  "cartId": "e2f4c6a4-9b7e-4e2a-9e0a-6d0d3b8f3c1a"
 }
 ```
 
 ---
 
-## 🧪 Pruebas
+### 2) Agregar/Reemplazar un ítem en el carrito
 
-Puedes crear pruebas unitarias sobre `CompraServiceImpl` inyectando un `PriceCatalog` fake para validar descuentos y obsequios sin depender de la CLI ni REST.
+**PUT** `/api/carts/{id}/items`
+
+Reemplaza la línea con el mismo `sku` (si existe) y devuelve todas las líneas actualizadas del carrito.
+
+**Request body** = `CartLine` en JSON (usa el modelo real del proyecto). Ejemplo ilustrativo:
+
+```json
+{
+  "sku": "SONY-1000XM5",
+  "quantity": 2
+}
+```
+
+**Response** `200 OK`
+
+```json
+[
+  { "sku": "SONY-1000XM5", "quantity": 2 },
+  { "sku": "JBL-660NC",   "quantity": 1 }
+]
+```
+
+**cURL**
+
+```bash
+curl -s -X PUT http://localhost:8080/api/carts/{cartId}/items \
+  -H 'Content-Type: application/json' \
+  -d '{"sku":"SONY-1000XM5","quantity":2}'
+```
 
 ---
 
-## 📄 Licencia
+### 3) Ver carrito
 
-MIT
+**GET** `/api/carts/{id}`
+
+**Response** `200 OK`
+
+```json
+[
+  { "sku": "SONY-1000XM5", "quantity": 2 },
+  { "sku": "JBL-660NC",   "quantity": 1 }
+]
+```
+
+**cURL**
+
+```bash
+curl -s http://localhost:8080/api/carts/{cartId}
+```
+
+---
+
+### 4) Checkout (calcular totales y limpiar carrito)
+
+**POST** `/api/carts/{id}/checkout`
+
+Ejecuta el cálculo en `CartService.checkout(lines)` y **borra** el carrito.
+
+**Response** `200 OK` (payload = `CartResult` del dominio; ejemplo ilustrativo):
+
+```json
+{
+  "subtotal": 12999.00,
+  "discounts": [
+    { "label": "Promo Sony 2x", "amount": 1000.00 },
+    { "label": "Adaptador JBL", "amount": 199.00 }
+  ],
+  "total": 11799.00,
+  "lines": [
+    { "sku": "SONY-1000XM5", "quantity": 2 },
+    { "sku": "JBL-660NC",   "quantity": 1 }
+  ]
+}
+```
+
+**cURL**
+
+```bash
+curl -s -X POST http://localhost:8080/api/carts/{cartId}/checkout
+```
+
+---
+
+### Errores comunes
+
+* `NoSuchElementException` (carrito inexistente) → mapealo a **404 Not Found** con un `@ControllerAdvice`. Sin ese handler global, Spring podría responder **500**.
+* Validación de payload: añade `@Valid` y constraints en los DTOs para respuestas **400** claras.
+
+## 🔐 Seguridad (opcional)
+
+El **rest** puede exponerse público o protegido. Dos opciones típicas:
+
+**1) Basic Auth (demo rápida)**
+
+* Usuarios en memoria y reglas por rol.
+* Handlers JSON para 401/403.
+
+**2) OAuth2 Resource Server (JWT)**
+
+* Valida `Authorization: Bearer <jwt>` contra tu IdP (Keycloak/Auth0/Azure AD).
+* `JwtAuthenticationConverter` para mapear claims → `ROLE_*` si usas `hasRole`.
+
+> La API y las reglas de negocio del **core** no cambian; solo cambia el mecanismo de autenticación/autorización en **rest**.
+
+## 🧠 Dominio y reglas (core)
+
+* Entidades/VOs inmutables (Producto, Marca, ItemCarrito, Carrito, Descuento, Promocion).
+* Reglas de negocio como **funciones puras**/estrategias componibles (Open/Closed).
+* `CompraService` orquesta: `subtotal → aplicar reglas → total`, retornando un **detalle** auditable.
+
+## 🧪 Pruebas
+
+* **core**: tests de unidad puros (sin Spring/IO).
+* **rest**: tests de integración (mapeos, validaciones, 200/401/403).
+
+Ejecutar tests:
+
+```bash
+mvn test
+```
+
+## 🛣️ Roadmap
+
+* [ ] Documentación OpenAPI/Swagger para **rest**.
+* [ ] Matriz de reglas configurable (YAML/DB) para activar/desactivar promos.
+* [ ] Métricas (Prometheus) y logging estructurado (ELK) en **rest**.
+
+## 🤝 Contribuciones
+
+1. Branch por feature (`feature/nueva-regla-descuento`).
+2. Añade tests y doc.
+3. Pull Request con contexto de negocio y casos cubiertos.
+
+## 📝 Licencia
+
+MIT (o la licencia del repo).
+
+---
+
+**Changelog**
+
+* **2025-08-22**: README actualizado: **REST** integrado al flujo de build/run, BOMs/Plugins alineados al parent POM, ejemplos de API y seguridad opcional.
