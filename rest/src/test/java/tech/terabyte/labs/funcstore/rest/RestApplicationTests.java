@@ -1,4 +1,4 @@
-package tech.terabyte.labs.rest;
+package tech.terabyte.labs.funcstore.rest;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
